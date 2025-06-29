@@ -1,0 +1,73 @@
+/* 기본 테이블 스타일 */
+#plato-calendar table {
+width: 100%; /* 테이블 전체 너비 */
+border-collapse: collapse; /* 테두리 겹침 방지 */
+font-family: 'Arial', sans-serif; /* 기본 글꼴 설정 */
+border: 1px solid #e0e0e0; /* 테이블 전체 외곽선 */
+box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* 그림자 효과 */
+}
+
+/* 테이블 헤더 (요일) 스타일 */
+#plato-calendar thead th {
+background-color: #f8f9fa; /* 헤더 배경색 */
+color: #333; /* 글자색 */
+padding: 12px 15px; /* 내부 여백 */
+font-weight: bold; /* 굵은 글씨 */
+text-align: center; /* 가운데 정렬 */
+border-bottom: 2px solid #dee2e6; /* 아래쪽 테두리 */
+}
+
+/* 요일별 색상 */
+#plato-calendar thead th:first-child { /* 일요일 */
+color: #d9534f;
+}
+
+#plato-calendar thead th:last-child { /* 토요일 */
+color: #428bca;
+}
+
+/* 테이블 셀 (날짜) 스타일 */
+#plato-calendar td {
+width: 14.28%; /* 7개 셀이므로 동일한 너비로 분할 */
+height: 100px; /* 셀 높이 */
+border: 1px solid #e0e0e0; /* 셀 테두리 */
+vertical-align: top; /* 내용물 상단 정렬 */
+padding: 8px; /* 내부 여백 */
+transition: background-color 0.3s; /* 배경색 변경 시 부드러운 전환 효과 */
+}
+
+/* 날짜가 없는 빈 셀 스타일 */
+#plato-calendar td:empty {
+background-color: #fdfdfd;
+}
+
+/* 셀에 마우스 올렸을 때 효과 */
+#plato-calendar td:not(:empty):hover {
+background-color: #f0f8ff; /* 연한 하늘색 배경 */
+cursor: pointer; /* 마우스 커서 모양 변경 */
+}
+
+/* 날짜 숫자 스타일 */
+#plato-calendar .date-label-div {
+font-size: 14px;
+font-weight: bold;
+color: #555;
+margin-bottom: 5px; /* 날짜와 정보 사이의 간격 */
+}
+
+/* 토요일 날짜 색상 */
+#plato-calendar tr td:last-child .date-label-div {
+color: #428bca;
+}
+
+/* 일요일 날짜 색상 */
+#plato-calendar tr td:first-child .date-label-div {
+color: #d9534f;
+}
+
+/* 정보 표시 영역 (현재는 비어있음) */
+#plato-calendar .info-div {
+font-size: 12px;
+color: #666;
+/* 이곳에 이벤트 등 추가 정보에 대한 스타일을 지정할 수 있습니다. */
+}

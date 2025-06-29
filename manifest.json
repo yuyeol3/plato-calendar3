@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "plato calendar 3",
+  "version": "1.0",
+  "description": "플라토에 캘린더 기능을 추가합니다.",
+  "background": {
+    "service_worker": "dist/background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://plato.pusan.ac.kr/"],
+      "js": ["dist/content_scripts/content.js"],
+      "css": ["content_scripts/content.css"],
+      "run_at" : "document_idle"
+    }
+  ],
+  "options_page": "options/options.html",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://plato.pusan.ac.kr/"
+  ]
+}

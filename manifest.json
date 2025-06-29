@@ -21,6 +21,6 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://plato.pusan.ac.kr/"
+    "https://plato.pusan.ac.kr/*"
   ]
 }

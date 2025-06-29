@@ -13,5 +13,8 @@
   "devDependencies": {
     "@types/chrome": "^0.0.328",
     "esbuild": "^0.25.5"
+  },
+  "dependencies": {
+    "node-html-parser": "^7.0.1"
   }
 }

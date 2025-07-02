@@ -9,21 +9,22 @@ box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* 그림자 효과 */
 
 /* 테이블 헤더 (요일) 스타일 */
 #plato-calendar thead th {
-background-color: #f8f9fa; /* 헤더 배경색 */
-color: #333; /* 글자색 */
-padding: 12px 15px; /* 내부 여백 */
-font-weight: bold; /* 굵은 글씨 */
-text-align: center; /* 가운데 정렬 */
-border-bottom: 2px solid #dee2e6; /* 아래쪽 테두리 */
+    background-color: #f8f9fa; /* 헤더 배경색 */
+    color: #333; /* 글자색 */
+    padding: 12px 15px; /* 내부 여백 */
+    font-weight: bold; /* 굵은 글씨 */
+    text-align: center; /* 가운데 정렬 */
+    border-bottom: 2px solid #dee2e6; /* 아래쪽 테두리 */
+    border-left : 1px solid #dee2e6;
 }
 
 /* 요일별 색상 */
 #plato-calendar thead th:first-child { /* 일요일 */
-color: #d9534f;
+    color: #d9534f;
 }
 
 #plato-calendar thead th:last-child { /* 토요일 */
-color: #428bca;
+    color: #428bca;
 }
 
 /* 테이블 셀 (날짜) 스타일 */
@@ -67,7 +68,10 @@ color: #d9534f;
 
 /* 정보 표시 영역 (현재는 비어있음) */
 #plato-calendar .info-div {
-font-size: 12px;
-color: #666;
-/* 이곳에 이벤트 등 추가 정보에 대한 스타일을 지정할 수 있습니다. */
+    font-size: 12px;
+    color: #666;
+    max-width: 100%;
+    max-height: 100px;
+    overflow-y: auto;
+    /* 이곳에 이벤트 등 추가 정보에 대한 스타일을 지정할 수 있습니다. */
 }

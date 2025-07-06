@@ -15,7 +15,7 @@ export default class CalendarStorageManager {
         this.KEY_NAME = "plato-calendar3";
         const storageStr = localStorage.getItem(this.KEY_NAME);
         this.data = storageStr ? JSON.parse(storageStr) : {};
-
+        CalendarStorageManager.update();
     }
 
     // 추가
@@ -44,16 +44,43 @@ export default class CalendarStorageManager {
         localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
     }
  
+    cleanUp(schedules : Schedule[]) {
+        const dateStrings : Set<string> = new Set();
+
+        for (const schedule of schedules) {
+            const d = new Date(schedule.due.toString());
+            if (d.toString() === "Invalid Date") continue;
+            d.setDate(1);
+            dateStrings.add(d.toDateString());
+        }
+
+        for (const dateString of dateStrings) {
+            const d = new Date(dateString);
+            const month = d.getMonth();
+
+            while (d.getMonth() != month) {
+                this.remove(d.toDateString());
+                d.setDate(d.getDate() + 1);
+            }
+        }
+
+    }
+
     static async update() {
         const schedules = await getSchedules();
-        const currentCourses = await getCurrentCourses();
+        const currentCourses = await getCurrentCourses() ?? [];
+
+        this.getInstance().cleanUp(currentCourses.map(e=>Object.values(schedules[e.id])).flat());
 
         for (const course of currentCourses) {
             const courseSchedules = Object.values(schedules[course.id]);
 
             for (const s of courseSchedules) {
+                const date = new Date(s.due.toString());
+                date.setSeconds(date.getSeconds() - 1); // 자정인 경우 하루 전으로 설정하기
                 this.getInstance().set(
-                    new Date(s.due.toString()).toDateString(), s.id, s
+                    date.toDateString(), 
+                    s.id, s
                 );
             }
         }

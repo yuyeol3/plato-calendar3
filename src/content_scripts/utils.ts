@@ -14,12 +14,23 @@ export async function getSchedules() : Promise<AllSchedules> {
     return response.result;
 }
 
+const LAST_UPDATE_KEY = "plato-calendar3-lastUpdate"
+
 export async function updateSchedules() {
+    localStorage.setItem(LAST_UPDATE_KEY, new Date().toString());
     const res = await chrome.runtime.sendMessage({
         action: "updateData"
     });
 
     console.log(res);
+}
+
+export  function CheckScheduleUpdateTiming() {
+    const now = new Date().getTime();
+    const lastUpdated = new Date(localStorage.getItem(LAST_UPDATE_KEY) as string)?.getTime() ?? 0;
+
+    const HOUR = 1000 * 3600;
+    return (now-lastUpdated > HOUR);
 }
 
 export async function getCurrentCourses() : Promise<Subject[]> {

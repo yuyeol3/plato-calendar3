@@ -1,7 +1,7 @@
 import { parse } from 'node-html-parser';
 import ScheduleStorageManager from './scheduleStorageManager';
 
-enum ScheduleType { HW, VID, ZOOM, QUIZ, PA };
+export enum ScheduleType { HW, VID, ZOOM, QUIZ, PA };
 
 export interface Schedule {
     type : ScheduleType;
@@ -177,10 +177,18 @@ async function getVids(subject : Subject) {
         .from(vidParsed.querySelectorAll(".user_progress_table tbody tr"))
         .filter(e => e.children[1] && e.children[1].textContent.trim() !== "") // 2번째 <td> 요소가 비어있지 않은 행만 필터링
         .map(e=> Array.from(e.querySelectorAll("td:not(td[rowspan])")))
-        .map(e => e[3] ? e[3].textContent.trim() === "O" : false);
+        .map(e => 
+            e[3] ? e[3].textContent.trim() === "O" : false
+        );
 
-    for (let i = 0; i < result.length; i++) {
-        result[i].completed = vidData[i];
+    // const attendanceVids = result.filter((e)=>e.due.toString() !== "Invalid Date");
+    let ridx = 0, vidx = 0;
+    while (ridx < result.length) {
+        if (result[ridx].due.toString() != "Invalid Data" && 
+            result[ridx].due.toString() != new Date(0).toString())
+            result[ridx].completed = vidData[vidx++];
+        else result[ridx].completed = true;
+        ridx++;
     }
     return result;
 }
@@ -245,7 +253,7 @@ async function getPAs(subject : Subject) {
 }
 
 export async function updateData() {
-    const courses = await getCoursesListTest();
+    const courses = await getCoursesList();
 
     for (const course of courses) {
         const result = (await Promise.all([
@@ -257,18 +265,7 @@ export async function updateData() {
         ]))
         .flat()
         .filter((e)=>e!==undefined);
-        // const hws = await getHomeworks(course);
-        // const quizs = await getQuizes(course);
-        // const vids = await getVids(course);
-        // const zooms = await getZooms(course);
-        // const pas = await getPAs(course);
-        // const result = [
-        //     ...(hws ?? []), 
-        //     ...(quizs ?? []),
-        //     ...(vids ?? []),
-        //     ...(zooms ?? []),
-        //     ...(pas ?? [])
-        // ]
+
         ScheduleStorageManager
             .getInstance()
             .updateSchedulesForCourse(course.id, result);

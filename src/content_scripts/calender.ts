@@ -1,13 +1,28 @@
 import { AllSchedules } from "../background/scheduleStorageManager";
-import { Schedule } from "../background/updateSchedule";
+import { Schedule, ScheduleType } from "../background/updateSchedule";
 import CalendarStorageManager from "./CalendarStorageManager";
-import { getCurrentCourses, getSchedules, updateSchedules } from "./utils";
+import Modal from "./modal";
+import { CheckScheduleUpdateTiming, getCurrentCourses, getSchedules, updateSchedules } from "./utils";
 
-function createScheduleDiv(data : Schedule) {
+
+export const ScheduleStyles = {
+    [ ScheduleType.HW ] : "hw",
+    [ ScheduleType.VID ] : "vid",
+    [ ScheduleType.QUIZ ] : "quiz",
+    [ ScheduleType.ZOOM ] : "zoom",
+    [ ScheduleType.PA ] : "pa"
+}
+
+function createScheduleMiniDiv(data : Schedule) {
     const divEl = document.createElement("div");
     divEl.innerHTML = `
-        <img src=""></img>
+        ${data.name}
     `
+    divEl.classList.add("mini-schedule");
+    if (!data.orphaned && !data.completed) divEl.classList.add(ScheduleStyles[data.type]);
+    else if (data.completed) divEl.classList.add("completed")
+    else divEl.classList.add("orphaned");
+    return divEl;
 }
 
 // singleton
@@ -16,6 +31,7 @@ export default class Calendar {
     private date : Date;
     private dateCells : HTMLTableCellElement[];
     private monthLabel : HTMLSpanElement;
+    private maxScheduleRender = 2;
     // 굳이 가지고있을 필요 없을수도
     // private prevBtn : HTMLButtonElement;
     // private nextBtn : HTMLButtonElement;
@@ -45,10 +61,16 @@ export default class Calendar {
         }
 
         updateBtn.onclick = async ()=>{
-            await updateSchedules();
-            await CalendarStorageManager.update();
-            await this.render();
+            updateBtn.textContent = "업데이트 중"
+            updateBtn.classList.add("updating");
+            updateBtn.disabled = true;
+            await this.updateSchedules();
+            updateBtn.textContent = "업데이트"
+            updateBtn.classList.remove("updating");
+            updateBtn.disabled = false;
         };
+
+        if (CheckScheduleUpdateTiming()) updateBtn.click();
     }
 
     private async render() {
@@ -59,7 +81,7 @@ export default class Calendar {
 
         // await this.getSchedules();
         // console.log(this.schedules);
-
+        const today = new Date().toDateString();
         while (d.getMonth() == month) {
             const target = this.dateCells[d.getDate() - 1 + day];
 
@@ -69,19 +91,32 @@ export default class Calendar {
             dateLabelDiv.classList.add("date-label-div");
             infoDiv.classList.add("info-div");
 
-            dateLabelDiv.textContent = d.getDate().toString();
+            if (d.toDateString() == today) dateLabelDiv.classList.add("today");
+
 
             const targetSchedules = CalendarStorageManager.getInstance().get(d.toDateString());
             
-            for (const schedule of targetSchedules) {
-                const divEl = document.createElement("div");
-                divEl.textContent = schedule.name;
-                divEl.style.width = "90%";
-                infoDiv.appendChild(divEl);
+
+            for (let i = 0; i < Math.min(targetSchedules.length, this.maxScheduleRender); i++) {
+                infoDiv.appendChild(createScheduleMiniDiv(targetSchedules[i]));
+            }
+
+            dateLabelDiv.innerHTML = `
+                <span class="date-label">${d.getDate().toString()}</span>
+                <span class="unresolved-schedules">${targetSchedules.filter(e=>!e.completed && !e.orphaned).length || ""}</span>
+            `
+
+
+            if (targetSchedules.length > this.maxScheduleRender) {
+                const hiddenScheduleDiv = document.createElement("div");
+                hiddenScheduleDiv.textContent = `+${targetSchedules.length - this.maxScheduleRender}`;
+                infoDiv.appendChild(hiddenScheduleDiv);
             }
 
             target.appendChild(dateLabelDiv);
             target.appendChild(infoDiv);
+            const curD = new Date(d.toString())
+            target.onclick = ()=> { Modal.getInstance().open(curD.toDateString()) }
             d.setDate(d.getDate() + 1);
         }
         
@@ -110,23 +145,24 @@ export default class Calendar {
         this.monthLabel.textContent = `${this.date.getFullYear()}년 ${this.date.getMonth() + 1}월`;
     }
 
-    // private async getSchedules() {
-    //     this.schedules = await getSchedules();
-    //     const currentCourses = await getCurrentCourses();
-
-        
-    // }
+    private async updateSchedules() {
+        await updateSchedules();
+        await CalendarStorageManager.update();
+        await this.render();
+    }
 
     public static async getView() : Promise<HTMLDivElement> {
         const calendarEl = document.createElement("div");
 
         calendarEl.innerHTML = (`
-            <div id="info">
-                <button id="prev-btn">prev</button>
-                <span id="month-label"></span>
-                <button id="next-btn">next</button>
+            <div id="control">
+                <div id="info">
+                    <button id="prev-btn">&lt;</button>
+                    <span id="month-label"></span>
+                    <button id="next-btn">&gt;</button>
+                </div>
+                <button id="update-btn">업데이트</button>
             </div>
-            <button id="update-btn">업데이트</button>
             <table>
                 <thead>
                     <tr>

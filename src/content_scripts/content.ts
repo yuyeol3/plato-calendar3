@@ -1,5 +1,7 @@
 import Calendar from "./calender";
+import Modal from "./modal";
 import { Subject } from "../background/updateSchedule";
+
 // import {calendarCss} from "./consts";
 
 
@@ -14,17 +16,11 @@ async function main() : Promise<void> {
     // styleEl.innerHTML = calendarCss;
     
     detailsEl.appendChild(summaryEl);
+    detailsEl.appendChild(await Modal.getView());
     detailsEl.appendChild(await Calendar.getView());
     detailsEl.setAttribute("id", "plato-calendar");
     
-    // targetEl?.prepend(styleEl);
     targetEl?.prepend(detailsEl);
-
-    // const res = await chrome.runtime.sendMessage({
-    //     action: "loadCurCourses"
-    // });
-
-    // console.log(res);
 }
 
 main();

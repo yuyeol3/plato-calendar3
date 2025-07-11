@@ -30,8 +30,8 @@ async function fetchAndParse(url: string) {
     }
 }
 
-export async function getCoursesListTest() {
-    const res = await fetch("https://plato.pusan.ac.kr/local/ubion/user/index.php?year=2024&semester=20");
+export async function getCoursesListTest(year : string, semester : string) {
+    const res = await fetch(`https://plato.pusan.ac.kr/local/ubion/user/index.php?year=${year}&semester=${semester}`);
     const coursePage = await res.text();
     
     const parsed = parse(coursePage);

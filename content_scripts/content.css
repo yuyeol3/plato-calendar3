@@ -164,8 +164,15 @@ color: #d9534f;
 #plato-calendar .today .date-label {
     background-color: #97b8ff;
     color: black;
-    padding: 5px 10px;
-    border-radius: 5px;
+    width: 25px;
+    height: 25px;
+    text-align: center;
+    /* padding: 5px 10px; */
+    border-radius: calc(25px / 2);
+
+    /* display: flex;
+    align-items: center;
+    justify-content: center; */
 }
 
 

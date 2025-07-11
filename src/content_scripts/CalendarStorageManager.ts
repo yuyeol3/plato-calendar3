@@ -13,8 +13,8 @@ export default class CalendarStorageManager {
     private data : CalendarStorage;
     private constructor() {
         this.KEY_NAME = "plato-calendar3";
-        const storageStr = localStorage.getItem(this.KEY_NAME);
-        this.data = storageStr ? JSON.parse(storageStr) : {};
+        // const storageStr = localStorage.getItem(this.KEY_NAME);
+        this.data = {};
         CalendarStorageManager.update();
     }
 
@@ -31,7 +31,8 @@ export default class CalendarStorageManager {
             existingSchedule.orphaned = data.orphaned;
         }
 
-        localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
+        // localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
+        CalendarStorageManager.save(this.data);
     }   
 
     // 조회
@@ -41,7 +42,8 @@ export default class CalendarStorageManager {
     // 삭제
     remove(date : string) {
         delete this.data[date];
-        localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
+        // localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
+        CalendarStorageManager.save(this.data);
     }
  
     cleanUp(schedules : Schedule[]) {
@@ -66,10 +68,27 @@ export default class CalendarStorageManager {
 
     }
 
+    static async save(data : CalendarStorage) {
+        await chrome.runtime.sendMessage({
+            data : data,
+            action : "calendar/save"
+        })
+    }
+
+    static async load() : Promise<CalendarStorage> {
+        const response = await chrome.runtime.sendMessage({
+            action : "calendar/load"
+        })
+
+        return response.result;
+    }
+
     static async update() {
+        const data = await this.load();
         const schedules = await getSchedules();
         const currentCourses = await getCurrentCourses() ?? [];
 
+        this.getInstance().data = data;
         this.getInstance().cleanUp(currentCourses.map(e=>Object.values(schedules[e.id])).flat());
 
         for (const course of currentCourses) {

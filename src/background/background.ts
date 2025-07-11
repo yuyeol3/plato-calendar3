@@ -14,6 +14,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse)=> {
         .then((res)=>{
           sendResponse({result: res});
       });
+      return true;
     }
 
     if (message?.action === "loadSchedules") {
@@ -21,6 +22,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse)=> {
         .then((res)=>{
           sendResponse({result : res});
         })
+      return true;
     }
 
     if (message?.action === "loadCurCourses") {
@@ -28,7 +30,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse)=> {
         .then((res)=> {
           sendResponse({result : res?.currentCourses ?? {}})
         })
+        return true;
     }
-  
-    return true;
+
+    if (message?.action === "calendar/save") {
+      chrome.storage.local.set({calendarData : message.data})
+        .then(()=>{sendResponse({result : true})});
+        return true;
+    }
+
+    if (message?.action === "calendar/load") {
+      chrome.storage.local.get({calendarData : {}})
+        .then((res)=> {
+          sendResponse({result : res?.calendarData ?? {}})
+        })
+        return true;
+    }  
 });

@@ -51,10 +51,10 @@ export default class Modal {
         }
     }
 
-    open(date : string) {
+    async open(date : string) {
         this.contentDiv.innerHTML = "";
         this.titleEl.textContent = new Date(date).toLocaleDateString();
-        const schedules = CalendarStorageManager.getInstance().get(date);
+        const schedules = await CalendarStorageManager.getInstance().get(date);
 
         if (schedules.length === 0 ) return;
 

@@ -11,15 +11,17 @@ export default class CalendarStorageManager {
     private static instance : CalendarStorageManager;
     private KEY_NAME : string;
     private data : CalendarStorage;
+    private updatePromise : Promise<void>;
     private constructor() {
         this.KEY_NAME = "plato-calendar3";
         // const storageStr = localStorage.getItem(this.KEY_NAME);
         this.data = {};
-        CalendarStorageManager.update();
+        this.updatePromise = CalendarStorageManager.update();
     }
 
     // 추가
     set(date : string, id : string, data : Schedule) {
+        // console.log("inside set:", date, id, data);
         if (!this.data[date]) this.data[date] = {};
         if (!this.data[date]?.[id]) this.data[date][id] = data;
         else {
@@ -29,6 +31,7 @@ export default class CalendarStorageManager {
             existingSchedule.completed = data.completed;
             existingSchedule.due = data.due;
             existingSchedule.orphaned = data.orphaned;
+
         }
 
         // localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
@@ -36,13 +39,19 @@ export default class CalendarStorageManager {
     }   
 
     // 조회
-    get(date : string) {
+    async get(date : string) {
+        await this.updatePromise;
         return Object.values(this.data[date] ?? {});
     }
     // 삭제
     remove(date : string) {
         delete this.data[date];
         // localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
+        CalendarStorageManager.save(this.data);
+    }
+
+    removeById(date : string, id : string) {
+        delete this.data[date]?.[id];
         CalendarStorageManager.save(this.data);
     }
  
@@ -90,7 +99,7 @@ export default class CalendarStorageManager {
 
         this.getInstance().data = data;
         this.getInstance().cleanUp(currentCourses.map(e=>Object.values(schedules[e.id])).flat());
-
+        // console.log("cleanup target: ", currentCourses.map(e=>Object.values(schedules[e.id])).flat());
         for (const course of currentCourses) {
             const courseSchedules = Object.values(schedules[course.id]);
 

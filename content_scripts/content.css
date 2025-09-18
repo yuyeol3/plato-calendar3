@@ -4,12 +4,21 @@
 }
 
 #plato-calendar * {
-  /* 표준 구문 */
-  user-select: none;
+    /* all : unset; */
+    /* 표준 구문 */
+    user-select: none;
   /* 크로스 브라우징을 위한 접두사 */
   -webkit-user-select: none; /* Chrome, Safari, Opera */
   -moz-user-select: none;    /* Firefox */
   -ms-user-select: none;     /* Internet Explorer/Edge */
+}
+
+#plato-calendar button {
+    padding: 2px 5px;
+}
+
+#plato-calendar h2 {
+    font-size: 15px;
 }
 
 #plato-calendar summary {
@@ -101,6 +110,7 @@
 
 /* 테이블 셀 (날짜) 스타일 */
 #plato-calendar td {
+position: relative;
 width: 14.28%; /* 7개 셀이므로 동일한 너비로 분할 */
 height: 100px; /* 셀 높이 */
 border: 1px solid #e0e0e0; /* 셀 테두리 */
@@ -149,6 +159,83 @@ color: #d9534f;
     overflow-y: auto;
     /* 이곳에 이벤트 등 추가 정보에 대한 스타일을 지정할 수 있습니다. */
 
+}
+
+
+/* #plato-calendar .hover-div {
+    position: absolute;
+    display: none;
+    left : 0;
+}
+
+#plato-calendar .hover-div.show {
+    
+    display: block;
+    
+    left : calc(100%);
+    z-index: 10;
+    background-color: white;
+    padding: 10px;
+    
+} */
+
+/* 기본 툴팁(숨김) */
+#plato-calendar .hover-div {
+  position: absolute;
+  display: block;              /* 항상 DOM에 있고 */
+  pointer-events: none;        /* 툴팁에 커서 올라가도 깜빡임 방지 */
+  top: 8px;                    /* 셀 안에서 살짝 내려 */
+  left: calc(100% + 12px);     /* 셀 오른쪽 밖으로 */
+  z-index: 100;
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.15);
+  min-width: 240px;
+  max-width: 320px;
+  width: 100%;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity .15s ease, visibility .15s ease, transform .15s ease;
+  
+
+  white-space: nowrap;        /* 한 줄로 */
+  overflow: hidden;           /* 넘치는 건 숨기고 */
+  text-overflow: ellipsis;    /* … 표시 */
+}
+
+/* 화살표 */
+#plato-calendar .hover-div::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  right: 100%;
+  border: 6px solid transparent;
+  border-right-color: #fff;
+}
+
+/* 셀을 호버(또는 포커스)하면 툴팁 표시 */
+#plato-calendar td:hover > .hover-div,
+#plato-calendar td:focus-within > .hover-div {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* 토요일(7번째 열)은 왼쪽으로 뒤집기 */
+#plato-calendar tr > td:nth-child(7) > .hover-div,
+#plato-calendar tr > td:nth-child(6) > .hover-div {
+  left: auto;
+  right: calc(100% + 12px);
+}
+#plato-calendar tr > td:nth-child(7) > .hover-div::before,
+#plato-calendar tr > td:nth-child(6) > .hover-div::before
+{
+  right: auto;
+  left: 100%;
+  border-right-color: transparent;
+  border-left-color: #fff;
 }
 
 

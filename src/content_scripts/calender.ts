@@ -94,8 +94,11 @@ export default class Calendar {
             if (d.toDateString() == today) dateLabelDiv.classList.add("today");
 
 
-            const targetSchedules = CalendarStorageManager.getInstance().get(d.toDateString());
-            
+            const targetSchedules = (await CalendarStorageManager.getInstance().get(d.toDateString()));
+            // for (let i = 0; i < targetSchedules.length; i++) {
+            //     const targetSchedule = targetSchedules[i];
+                
+            // }
 
             for (let i = 0; i < Math.min(targetSchedules.length, this.maxScheduleRender); i++) {
                 infoDiv.appendChild(createScheduleMiniDiv(targetSchedules[i]));
@@ -106,17 +109,25 @@ export default class Calendar {
                 <span class="unresolved-schedules">${targetSchedules.filter(e=>!e.completed && !e.orphaned).length || ""}</span>
             `
 
-
             if (targetSchedules.length > this.maxScheduleRender) {
                 const hiddenScheduleDiv = document.createElement("div");
                 hiddenScheduleDiv.textContent = `+${targetSchedules.length - this.maxScheduleRender}`;
                 infoDiv.appendChild(hiddenScheduleDiv);
+
+                const hoverDiv = document.createElement("div");
+                hoverDiv.classList.add("hover-div");
+                for (let i = 0; i < targetSchedules.length; i++) {
+                    hoverDiv.appendChild(createScheduleMiniDiv(targetSchedules[i]));
+                }
+                target.appendChild(hoverDiv)
             }
 
             target.appendChild(dateLabelDiv);
             target.appendChild(infoDiv);
             const curD = new Date(d.toString())
             target.onclick = ()=> { Modal.getInstance().open(curD.toDateString()) }
+            // target.onmouseover = ()=> { hoverDiv.classList.add("show") }
+            // target.onmouseout = () => { hoverDiv.classList.remove("show") }
             d.setDate(d.getDate() + 1);
         }
         
@@ -151,7 +162,7 @@ export default class Calendar {
         await this.render();
     }
 
-    public static async getView() : Promise<HTMLDivElement> {
+    public static getView() : HTMLDivElement {
         const calendarEl = document.createElement("div");
 
         calendarEl.innerHTML = (`

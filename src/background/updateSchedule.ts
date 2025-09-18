@@ -1,4 +1,4 @@
-import { parse } from 'node-html-parser';
+import { parse, HTMLElement as NodeParserElement } from 'node-html-parser';
 import ScheduleStorageManager from './scheduleStorageManager';
 
 export enum ScheduleType { HW, VID, ZOOM, QUIZ, PA };
@@ -29,6 +29,28 @@ async function fetchAndParse(url: string) {
         return parsed;
     }
 }
+
+type LanguageCode = "ko" | "en" | "zh-cn" ;
+
+function getLang(html : NodeParserElement | undefined) : LanguageCode {
+    return (html?.querySelector("html")?.getAttribute('lang') ?? 'ko') as LanguageCode;
+}
+
+function usDateStringToDate(dateString : string | 0) : Date {
+    if (dateString === 0) 
+        return new Date(0);
+    const [datePart, timePart] = dateString.split(' ');
+    const [day, month, year] = datePart.split('/').map((e)=>parseInt(e));
+    const [hours, minutes] = timePart.split(':').map((e)=>parseInt(e));
+    return new Date(2000 + year, month-1, day, hours, minutes);
+}
+
+const lang_strings = {
+    DUE_DATE_HW : {"ko" : "종료 일시", "en" :  "Due date", "zh-cn" :"到期日期"},
+    DUE_DATE_QUIZ : {"ko" : "종료일시 : ", "en" : "This quiz closed on ", "zh-cn" : "此测验关闭于 "},
+    ATTENDANCE_PERIOD : {"ko" : "출석인정기간: ", "en" : "Period to take attendance: ", "zh-cn" : "Period to take attendance: "},
+    NO_SUBMISSIONS : {"ko" : "제출물이 존재하지 않습니다.", "en" : "No submission available", 'zh-cn' : "无可用提交"}
+};
 
 export async function getCoursesListTest(year : string, semester : string) {
     const res = await fetch(`https://plato.pusan.ac.kr/local/ubion/user/index.php?year=${year}&semester=${semester}`);
@@ -95,7 +117,7 @@ async function getHomeworks(subject : Subject) {
         sch.orphaned = false;
         sch.due = new Date(
             Array.from(parsed.querySelectorAll(".submissionsummarytable > table tr"))
-            .filter((e)=>e.children[0].textContent === "종료 일시")
+            .filter((e)=>e.children[0].textContent === lang_strings.DUE_DATE_HW[getLang(parsed)])
             .at(0)?.querySelector("td:nth-child(2)")
             ?.textContent ?? 0
         )
@@ -128,7 +150,7 @@ async function getQuizes(subject:Subject) {
         sch.due = new Date(
             parsed.querySelector(".quizinfo p:nth-child(2)")
                 ?.textContent
-                .replace("종료일시 : ", "")
+                .replace(lang_strings.DUE_DATE_QUIZ[getLang(parsed)], "")
                 .trim() ?? 0
             );     
         result.push(sch);
@@ -158,14 +180,17 @@ async function getVids(subject : Subject) {
         sch.id = new URL(hwLink).searchParams.get("id") ?? "";
         sch.url = hwLink;
         sch.orphaned = false;
-        sch.due = new Date(
-            Array.from(parsed.querySelectorAll(".vod_info_value"))
+
+        const dateString = Array.from(parsed.querySelectorAll(".vod_info_value"))
                 ?.at(1)
                 ?.textContent
-                ?.replace("출석인정기간: ", "")
+                ?.replace(lang_strings.ATTENDANCE_PERIOD[getLang(parsed)], "")
                 .trim() ?? 0
-            );     
-
+        // console.log(getLang(parsed), dateString);
+        sch.due = getLang(parsed) == 'en' ? 
+            usDateStringToDate(dateString) : 
+            new Date(dateString);     
+        // console.log(sch.due);
         result.push(sch);
     }
 
@@ -173,23 +198,23 @@ async function getVids(subject : Subject) {
 
     const vidParsed = await fetchAndParse(`https://plato.pusan.ac.kr/report/ubcompletion/user_progress_a.php?id=${subject.id}`);
     if (!vidParsed) return [];
-    const vidData = Array
+
+    const vidAttendanceData : Map<string, boolean> = new Map();
+    Array
         .from(vidParsed.querySelectorAll(".user_progress_table tbody tr"))
         .filter(e => e.children[1] && e.children[1].textContent.trim() !== "") // 2번째 <td> 요소가 비어있지 않은 행만 필터링
-        .map(e=> Array.from(e.querySelectorAll("td:not(td[rowspan])")))
-        .map(e => 
-            e[3] ? e[3].textContent.trim() === "O" : false
-        );
+        .map(e=> Array.from(e.querySelectorAll("td:not(td[rowspan])"))
+        .map(e=>e.textContent.trim()))
+        .forEach((e)=>{
+            vidAttendanceData.set(e[0], e[3] !== undefined && e[3] === "O")
+        })
 
-    // const attendanceVids = result.filter((e)=>e.due.toString() !== "Invalid Date");
-    let ridx = 0, vidx = 0;
-    while (ridx < result.length) {
-        if (result[ridx].due.toString() != "Invalid Data" && 
-            result[ridx].due.toString() != new Date(0).toString())
-            result[ridx].completed = vidData[vidx++];
-        else result[ridx].completed = true;
-        ridx++;
+    const attendanceVids = result.filter((e)=>e.due.toString() !== "Invalid Date");
+    for (const vid of attendanceVids) {
+        const query = vidAttendanceData.get(vid.name);
+        if (query) vid.completed = true;
     }
+
     return result;
 }
 
@@ -238,7 +263,7 @@ async function getPAs(subject : Subject) {
         sch.course = subject;
         sch.type = ScheduleType.PA;
         sch.name = row.children[1].querySelector("a")?.textContent ?? "";
-        sch.completed = row.children[4]?.textContent != "제출물이 존재하지 않습니다."
+        sch.completed = row.children[4]?.textContent != lang_strings.NO_SUBMISSIONS[getLang(parsed)];
         sch.url = "https://plato.pusan.ac.kr/mod/vpl/" 
             + (row.children[1].querySelector("a")?.getAttribute("href") ?? "");
         sch.id = new URL(sch.url).searchParams?.get("id") ?? "";
@@ -253,6 +278,7 @@ async function getPAs(subject : Subject) {
 }
 
 export async function updateData() {
+    // const courses = await getCoursesListTest("2025", "10");
     const courses = await getCoursesList();
 
     for (const course of courses) {

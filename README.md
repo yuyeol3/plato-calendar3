@@ -69,5 +69,4 @@ npm run build
 - PLATO HTML 구조가 바뀌면 `updateSchedule.ts`의 파싱 셀렉터를 먼저 확인해 주세요.
 - 새 일정 유형을 추가하려면 `ScheduleType` enum과 `ScheduleStyles`/`ScheduleIcons` 매핑을 확장해야 합니다.
 
-## 라이선스
-프로젝트에 명시된 라이선스가 없다면, 사용 전에 저장소 소유자와 상의해 주세요.
+

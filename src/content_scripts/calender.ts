@@ -95,19 +95,10 @@ export default class Calendar {
 
 
             const targetSchedules = (await CalendarStorageManager.getInstance().get(d.toDateString()));
-            // for (let i = 0; i < targetSchedules.length; i++) {
-            //     const targetSchedule = targetSchedules[i];
-                
-            // }
 
             for (let i = 0; i < Math.min(targetSchedules.length, this.maxScheduleRender); i++) {
                 infoDiv.appendChild(createScheduleMiniDiv(targetSchedules[i]));
             }
-
-            dateLabelDiv.innerHTML = `
-                <span class="date-label">${d.getDate().toString()}</span>
-                <span class="unresolved-schedules">${targetSchedules.filter(e=>!e.completed && !e.orphaned).length || ""}</span>
-            `
 
             if (targetSchedules.length > this.maxScheduleRender) {
                 const hiddenScheduleDiv = document.createElement("div");
@@ -122,12 +113,15 @@ export default class Calendar {
                 target.appendChild(hoverDiv)
             }
 
+            dateLabelDiv.innerHTML = `
+                <span class="date-label">${d.getDate().toString()}</span>
+                <span class="unresolved-schedules">${targetSchedules.filter(e=>!e.completed && !e.orphaned).length || ""}</span>
+            `
+
             target.appendChild(dateLabelDiv);
             target.appendChild(infoDiv);
             const curD = new Date(d.toString())
             target.onclick = ()=> { Modal.getInstance().open(curD.toDateString()) }
-            // target.onmouseover = ()=> { hoverDiv.classList.add("show") }
-            // target.onmouseout = () => { hoverDiv.classList.remove("show") }
             d.setDate(d.getDate() + 1);
         }
         

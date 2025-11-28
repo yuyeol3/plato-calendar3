@@ -45,7 +45,7 @@ export default class CalendarStorageManager {
     }
     // 삭제
     remove(date : string) {
-        delete this.data[date];
+        this.data[date] = {};
         // localStorage.setItem(this.KEY_NAME, JSON.stringify(this.data));
         CalendarStorageManager.save(this.data);
     }
@@ -65,11 +65,13 @@ export default class CalendarStorageManager {
             dateStrings.add(d.toDateString());
         }
 
+
         for (const dateString of dateStrings) {
             const d = new Date(dateString);
             const month = d.getMonth();
 
-            while (d.getMonth() != month) {
+            while (d.getMonth() == month) {
+                // console.log("deleting : ", d);
                 this.remove(d.toDateString());
                 d.setDate(d.getDate() + 1);
             }
@@ -95,9 +97,12 @@ export default class CalendarStorageManager {
     static async update() {
         const data = await this.load();
         const schedules = await getSchedules();
-        const currentCourses = await getCurrentCourses() ?? [];
+        const currentCourses = await getCurrentCourses();
+
+        if (Object.keys(currentCourses).length == 0) return;
 
         this.getInstance().data = data;
+        // console.log(currentCourses);
         this.getInstance().cleanUp(currentCourses.map(e=>Object.values(schedules[e.id])).flat());
         // console.log("cleanup target: ", currentCourses.map(e=>Object.values(schedules[e.id])).flat());
         for (const course of currentCourses) {

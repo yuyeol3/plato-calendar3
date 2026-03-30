@@ -144,8 +144,8 @@ async function getQuizes(subject:Subject) {
         sch.type = ScheduleType.QUIZ;
         sch.name = parsed.querySelector(".page-content-container h2")?.textContent ?? "";
         sch.completed = (
-            parsed.querySelector("table.quizattemptsummary td.cell.c3") !== null && 
-            parsed.querySelector("table.quizattemptsummary td.cell.c3")?.textContent != ""
+            parsed.querySelector("table.quizattemptsummary > tbody > tr > td:last-child") !== null && 
+            parsed.querySelector("table.quizattemptsummary > tbody > tr > td:last-child")?.textContent != ""
         );
         sch.id = new URL(hwLink).searchParams.get("id") ?? "";
         sch.url = hwLink;

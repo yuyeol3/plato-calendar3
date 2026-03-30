@@ -79,6 +79,8 @@ export default class Calendar {
         const month = d.getMonth();
         const day = d.getDay();
 
+        await CalendarStorageManager.getInstance().loadMonth(this.date);
+
         // await this.getSchedules();
         // console.log(this.schedules);
         const today = new Date().toDateString();

@@ -143,7 +143,10 @@ async function getQuizes(subject:Subject) {
         sch.course = subject;
         sch.type = ScheduleType.QUIZ;
         sch.name = parsed.querySelector(".page-content-container h2")?.textContent ?? "";
-        sch.completed = parsed.querySelector("table.quizattemptsummary td.cell.c3")?.textContent != "";
+        sch.completed = (
+            parsed.querySelector("table.quizattemptsummary td.cell.c3") !== null && 
+            parsed.querySelector("table.quizattemptsummary td.cell.c3")?.textContent != ""
+        );
         sch.id = new URL(hwLink).searchParams.get("id") ?? "";
         sch.url = hwLink;
         sch.orphaned = false;
@@ -293,7 +296,7 @@ export async function updateData() {
         .flat()
         .filter((e)=>e!==undefined);
 
-        ScheduleStorageManager
+        await ScheduleStorageManager
             .getInstance()
             .updateSchedulesForCourse(course.id, result);
         console.log(course.name, result);

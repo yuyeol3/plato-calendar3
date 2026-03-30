@@ -47,7 +47,7 @@ function usDateStringToDate(dateString : string | 0) : Date {
 
 const lang_strings = {
     DUE_DATE_HW : {"ko" : "종료 일시", "en" :  "Due date", "zh-cn" :"到期日期"},
-    DUE_DATE_QUIZ : {"ko" : "종료일시 : ", "en" : "This quiz closed on ", "zh-cn" : "此测验关闭于 "},
+    DUE_DATE_QUIZ : {"ko" : "종료일시 : ", "en" : "This quiz will close on ", "zh-cn" : "此测验关闭于 "},
     ATTENDANCE_PERIOD : {"ko" : "출석인정기간: ", "en" : "Period to take attendance: ", "zh-cn" : "Period to take attendance: "},
     NO_SUBMISSIONS : {"ko" : "제출물이 존재하지 않습니다.", "en" : "No submission available", 'zh-cn' : "无可用提交"}
 };
@@ -151,6 +151,7 @@ async function getQuizes(subject:Subject) {
             parsed.querySelector(".quizinfo p:nth-child(2)")
                 ?.textContent
                 .replace(lang_strings.DUE_DATE_QUIZ[getLang(parsed)], "")
+                .replace(".", "")
                 .trim() ?? 0
             );     
         result.push(sch);

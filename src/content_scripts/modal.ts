@@ -1,37 +1,60 @@
 import { ScheduleType } from "../background/updateSchedule";
 import { Schedule } from "../background/updateSchedule";
 import CalendarStorageManager from "./CalendarStorageManager";
-import { ScheduleStyles } from "./calender";
+import { applyScheduleState, appendScheduleStatus } from "./calender";
 
 export const ScheduleIcons = {
-    [ ScheduleType.HW ] : "https://plato.pusan.ac.kr/theme/image.php/coursemosv2/assign/1745217358/icon",
-    [ ScheduleType.VID ] : "https://plato.pusan.ac.kr/theme/image.php/coursemosv2/vod/1745217358/icon",
-    [ ScheduleType.QUIZ ] : "https://plato.pusan.ac.kr/theme/image.php/coursemosv2/quiz/1745217358/icon",
-    [ ScheduleType.ZOOM ] : "https://plato.pusan.ac.kr/theme/image.php/coursemosv2/zoom/1745217358/icon",
-    [ ScheduleType.PA ] : "https://plato.pusan.ac.kr/theme/image.php/coursemosv2/vpl/1745217358/icon"
+    [ ScheduleType.HW ] : "https://plato.pusan.ac.kr/theme/image.php/coursemos/assign/1790758578/monologo",
+    [ ScheduleType.VID ] : "https://plato.pusan.ac.kr/theme/image.php/coursemos/vod/1790758578/monologo",
+    [ ScheduleType.QUIZ ] : "https://plato.pusan.ac.kr/theme/image.php/coursemos/quiz/1790758578/monologo",
+    [ ScheduleType.ZOOM ] : "https://plato.pusan.ac.kr/theme/image.php/coursemos/zoom/1790758578/monologo",
+    [ ScheduleType.PA ] : null,
+};
+
+const ScheduleLabels = {
+    [ ScheduleType.HW ] : "과제",
+    [ ScheduleType.VID ] : "영상",
+    [ ScheduleType.QUIZ ] : "시험",
+    [ ScheduleType.ZOOM ] : "Zoom",
+    [ ScheduleType.PA ] : "VPL"
 }
 
 function createScheduleDiv(data : Schedule) {
     const divEl = document.createElement("div");
-    divEl.innerHTML = `
-        <div id="icon-div">
-            <img src="${ScheduleIcons[data.type]}">
-        </div>
-        <div>
-            <h4>${data.name}</h4>
-            <p>${data.course.name}</p>
-            <p>${new Date(data.due).toLocaleString()}</p>
-        </div>
-        
-    `
+    const iconDiv = document.createElement("div");
+    iconDiv.id = "icon-div";
+    const iconUrl = ScheduleIcons[data.type];
+    if (iconUrl) {
+        const icon = document.createElement("img");
+        icon.src = iconUrl;
+        icon.alt = ScheduleLabels[data.type];
+        icon.width = 32;
+        icon.height = 32;
+        icon.onerror = () => { iconDiv.textContent = ScheduleLabels[data.type]; };
+        iconDiv.appendChild(icon);
+    } else iconDiv.textContent = ScheduleLabels[data.type];
+    const content = document.createElement("div");
+    const title = document.createElement("h4");
+    title.textContent = data.name;
+    const course = document.createElement("p");
+    course.textContent = data.course.name;
+    const due = document.createElement("p");
+    due.textContent = data.due == null ? "마감 없음" : new Date(data.due.toString()).toLocaleString();
+    content.append(title, course, due);
+    appendScheduleStatus(content, data);
+    if (data.completionBasis === "progress") {
+        const label = document.createElement("span");
+        label.className = "completion-progress";
+        label.textContent = "시청 기준 100%";
+        content.appendChild(label);
+    }
+    divEl.append(iconDiv, content);
     divEl.classList.add("schedule");
     divEl.onclick = ()=> {
         window.open(data.url);
     }
 
-    if (!data.orphaned && !data.completed) divEl.classList.add(ScheduleStyles[data.type]);
-    else if (data.completed) divEl.classList.add("completed")
-    else divEl.classList.add("orphaned");
+    applyScheduleState(divEl, data);
     return divEl;
 }
 
@@ -57,8 +80,6 @@ export default class Modal {
         const schedules = await CalendarStorageManager.getInstance().get(date);
 
         if (schedules.length === 0 ) return;
-
-        console.log(date, schedules);
 
         for (const schedule of schedules) {
             const divEl = createScheduleDiv(schedule);

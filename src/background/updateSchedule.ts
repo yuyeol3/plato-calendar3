@@ -1,305 +1,281 @@
-import { parse, HTMLElement as NodeParserElement } from 'node-html-parser';
+import { parse, HTMLElement } from 'node-html-parser';
 import ScheduleStorageManager from './scheduleStorageManager';
+import { findDates, getLaterDate } from './utils';
 
-export enum ScheduleType { HW, VID, ZOOM, QUIZ, PA };
-
+export enum ScheduleType { HW, VID, ZOOM, QUIZ, PA }
+export type Attendance = 'present' | 'late' | 'absent';
 export interface Schedule {
-    type : ScheduleType;
-    id : string;
-    name : string;
-    url : string;  
-    course : Subject;
-    completed : boolean;
-    orphaned : boolean;
-    due : Date | string;
+    type: ScheduleType;
+    id: string;
+    name: string;
+    url: string;
+    course: Subject;
+    completed: boolean | null;
+    attendance?: Attendance;
+    completionBasis?: 'progress';
+    orphaned: boolean;
+    due: Date | string | null;
+}
+export interface Subject { name: string; url: string; id: string }
+export type CollectedSchedule = Omit<Schedule, 'due'> & { due?: Schedule['due'] };
+export interface CourseCollection {
+    schedules: CollectedSchedule[];
+    discoveredIds: string[];
+    listingComplete: boolean;
+    errors: string[];
+    warnings: string[];
+}
+export interface UpdateResult { result: boolean; errors: string[]; warnings: string[] }
+const ORIGIN = 'https://plato.pusan.ac.kr';
+const MODULE_TYPES: Record<string, ScheduleType> = {
+    assign: ScheduleType.HW, vod: ScheduleType.VID, quiz: ScheduleType.QUIZ, zoom: ScheduleType.ZOOM,
 };
+const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : '알 수 없는 오류';
 
-export interface Subject {
-    name : string;
-    url : string;
-    id : string;
-}
-
-async function fetchAndParse(url: string) {
-    const res = await fetch(url);
-    if (res.ok) {
-        const page = await res.text();
-        // console.log(page);
-        const parsed = parse(page);
-        return parsed;
+async function fetchAndParse(url: string): Promise<HTMLElement> {
+    const res = await fetch(url, { credentials: 'include', signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`페이지 요청 실패 (${res.status})`);
+    const page = parse(await res.text());
+    if (res.url.includes('/login/') || page.querySelector('#page-login-index, #form-login-sso, form#login')) {
+        throw new Error('PLATO 로그인이 필요합니다.');
     }
+    if (page.querySelector('[data-rel="fatalerror"], .errorbox')) throw new Error('PLATO가 오류 화면을 반환했습니다.');
+    return page;
 }
 
-type LanguageCode = "ko" | "en" | "zh-cn" ;
-
-function getLang(html : NodeParserElement | undefined) : LanguageCode {
-    return (html?.querySelector("html")?.getAttribute('lang') ?? 'ko') as LanguageCode;
-}
-
-function usDateStringToDate(dateString : string | 0) : Date {
-    if (dateString === 0) 
-        return new Date(0);
-    const [datePart, timePart] = dateString.split(' ');
-    const [day, month, year] = datePart.split('/').map((e)=>parseInt(e));
-    const [hours, minutes] = timePart.split(':').map((e)=>parseInt(e));
-    return new Date(2000 + year, month-1, day, hours, minutes);
-}
-
-const lang_strings = {
-    DUE_DATE_HW : {"ko" : "종료 일시", "en" :  "Due date", "zh-cn" :"到期日期"},
-    DUE_DATE_QUIZ : {"ko" : "종료일시 : ", "en" : "This quiz will close on ", "zh-cn" : "此测验关闭于 "},
-    ATTENDANCE_PERIOD : {"ko" : "출석인정기간: ", "en" : "Period to take attendance: ", "zh-cn" : "Period to take attendance: "},
-    NO_SUBMISSIONS : {"ko" : "제출물이 존재하지 않습니다.", "en" : "No submission available", 'zh-cn' : "无可用提交"}
-};
-
-export async function getCoursesListTest(year : string, semester : string) {
-    const res = await fetch(`https://plato.pusan.ac.kr/local/ubion/user/index.php?year=${year}&semester=${semester}`);
-    const coursePage = await res.text();
-    
-    const parsed = parse(coursePage);
-    const courses = Array.from(parsed.querySelectorAll(".my-course-lists tr"));
-    const result : Subject[] = [];
-    for (const course of courses) {
-        const name = course.querySelector("a")?.textContent.split(' ')[0];
-        const url = course.querySelector("a")?.getAttribute("href");
-        const cid = new URL(url as string).searchParams.get("id");
-
-        result.push({name, url,  id : cid} as Subject);
+export async function getCoursesList(): Promise<Subject[]> {
+    const page = await fetchAndParse(`${ORIGIN}/`);
+    const section = page.querySelector('.dashboard-container .ongoing-courses');
+    if (!section) throw new Error('진행 중인 강좌 목록을 확인할 수 없습니다.');
+    const courses = new Map<string, Subject>();
+    for (const card of section.querySelectorAll('.course-card')) {
+        const href = card.getAttribute('href') ?? card.querySelector('a[href*="/course/view.php"]')?.getAttribute('href');
+        if (!href) throw new Error('강좌 링크를 확인할 수 없습니다.');
+        const url = new URL(href, ORIGIN);
+        const id = url.searchParams.get('id');
+        if (url.origin !== ORIGIN || url.pathname !== '/course/view.php' || !id || !/^\d+$/.test(id)) throw new Error('강좌 ID를 확인할 수 없습니다.');
+        const name = clean(card.querySelector('.course-info-header h5')?.textContent ?? '');
+        if (!name) throw new Error('강좌명을 확인할 수 없습니다.');
+        courses.set(id, { id, name, url: url.href });
     }
-
-    chrome.storage.local.set({ currentCourses : result });
-
+    const result = [...courses.values()];
+    await chrome.storage.local.set({ currentCourses: result });
     return result;
 }
 
-export async function getCoursesList() : Promise<Subject[]> {
-    const res = await fetch("https://plato.pusan.ac.kr/");
-    const coursePage = await res.text();
-    
-    const parsed = parse(coursePage);
-    const courses = Array.from(parsed.querySelectorAll(".course-box"));
-    const result : Subject[] = [];
-    for (const course of courses) {
-        const name = course.querySelector(".course-title h3 *:not(.new, .semester-name)")
-        ?.textContent
-        .match(/^.+(?=\s\()/)?.[0] ?? course.querySelector(".course-title h3 *:not(.new, .semester-name)")
-        ?.textContent ?? "";
-
-        const url = course.querySelector("a")?.getAttribute("href");
-        const cid = new URL(url as string).searchParams.get("id");
-
-        result.push({name, url,  id : cid} as Subject);
+export function getActivityLinks(page: HTMLElement, pageUrl: string) {
+    const table = page.querySelector('#region-main .table-activities');
+    if (!table) throw new Error('학습활동 목록 화면을 확인할 수 없습니다.');
+    const activities = new Map<string, { id: string; url: string; type: ScheduleType }>();
+    for (const link of table.querySelectorAll('a[href]')) {
+        const url = new URL(link.getAttribute('href')!, pageUrl);
+        const module = url.pathname.match(/^\/mod\/(assign|quiz|vod|zoom)\/view\.php$/)?.[1];
+        if (url.origin !== ORIGIN || !module) continue;
+        const id = url.searchParams.get('id');
+        if (!id || !/^\d+$/.test(id)) throw new Error('학습활동 ID를 확인할 수 없습니다.');
+        activities.set(id, { id, url: url.href, type: MODULE_TYPES[module] });
     }
-    chrome.storage.local.set({ currentCourses : result });
+    return [...activities.values()];
+}
+
+function getFields(page: HTMLElement): Map<string, string> {
+    const fields = new Map<string, string>();
+    for (const item of page.querySelectorAll('.cml-item')) {
+        const label = clean(item.querySelector('.cml-label')?.textContent ?? '').replace(/\s|:|：/g, '').toLowerCase();
+        const value = clean(item.querySelector('.cml-text')?.textContent ?? '');
+        if (label) fields.set(label, value);
+    }
+    return fields;
+}
+
+function getField(fields: Map<string, string>, labels: string[]): string | undefined {
+    for (const label of labels) {
+        const value = fields.get(label.replace(/\s|:|：/g, '').toLowerCase());
+        if (value !== undefined) return value;
+    }
+}
+
+function completionState(text: string): boolean | null {
+    if (/^(완료|이수 완료|이수|참여 완료|참여|Completed)$/i.test(clean(text))) return true;
+    if (/^(미완료|미이수|미참여|미충족|Incomplete|Not completed)$/i.test(clean(text))) return false;
+    return null;
+}
+
+function requiresLearningTime(page: HTMLElement): boolean {
+    const condition = getField(getFields(page), ['활동 완료 조건', '학습 완료 조건']) ?? '';
+    return /학습\s*시간\s*준수/.test(condition) && !/미사용|안\s*함|열람만|비활성|사용\s*안/.test(condition);
+}
+
+function videoId(row: HTMLElement, pageUrl: string): string | undefined {
+    for (const link of row.querySelectorAll('a[href]')) {
+        const url = new URL(link.getAttribute('href')!, pageUrl);
+        if (url.origin === ORIGIN && url.pathname === '/mod/vod/view.php') {
+            const id = url.searchParams.get('id');
+            if (id && /^\d+$/.test(id)) return id;
+        }
+    }
+}
+
+function parseAttendanceReport(page: HTMLElement, pageUrl: string): Map<string, Attendance> {
+    const result = new Map<string, Attendance>();
+    let recognized = false;
+    for (const table of page.querySelectorAll('#region-main table')) {
+        const headers = table.querySelectorAll('thead th').map(node => clean(node.textContent).replace(/\s/g, ''));
+        const statusIndex = headers.findIndex(text => /^(출결상태|출석상태|출석결과|Attendancestatus)$/i.test(text));
+        if (statusIndex < 0) continue;
+        recognized = true;
+        for (const row of table.querySelectorAll('tbody tr')) {
+            const id = videoId(row, pageUrl);
+            if (!id) continue; // 날짜별 대면 수업 출결을 영상 출결로 해석하지 않는다.
+            const cells = row.querySelectorAll('td');
+            const cell = statusIndex === headers.length - 1 ? cells[cells.length - 1] : cells.length === headers.length ? cells[statusIndex] : undefined;
+            const status = clean(cell?.textContent ?? '');
+            if (/^(출석|정상 출석|출석 인정|Present)$/i.test(status)) result.set(id, 'present');
+            else if (/^(지각|지각 인정|Late)$/i.test(status)) result.set(id, 'late');
+            else if (/^(결석|미충족|출석 미인정|Absent)$/i.test(status)) result.set(id, 'absent');
+        }
+    }
+    if (!recognized) throw new Error('영상 출석 보고서 구조를 확인할 수 없습니다.');
     return result;
 }
 
-async function getHomeworks(subject : Subject) {
-    const parsed = await fetchAndParse(`https://plato.pusan.ac.kr/mod/assign/index.php?id=${subject.id}`);
-    if (!parsed) return;
-    const hwLinks = Array
-                    .from(parsed.querySelectorAll("table a"))
-                    .map((e)=>e.getAttribute("href"));
-
-    const result : Schedule[] = [];
-    for (const hwLink of hwLinks) {
-        if (!hwLink) continue;
-        const parsed = await fetchAndParse(hwLink);
-        if (!parsed) continue;
-
-        const sch = new Object() as Schedule;
-        sch.course = subject;
-        sch.type = ScheduleType.HW;
-        sch.name = parsed.querySelector(".page-content-container h2")?.textContent ?? "";
-        sch.completed = parsed.querySelector(".submissionstatussubmitted") ? true : false;
-        sch.id = new URL(hwLink).searchParams.get("id") ?? "";
-        sch.url = hwLink;
-        sch.orphaned = false;
-        sch.due = new Date(
-            Array.from(parsed.querySelectorAll(".submissionsummarytable > table tr"))
-            .filter((e)=>e.children[0].textContent === lang_strings.DUE_DATE_HW[getLang(parsed)])
-            .at(0)?.querySelector("td:nth-child(2)")
-            ?.textContent ?? 0
-        )
-        result.push(sch);
-    }
-    return result;
-}
-
-async function getQuizes(subject:Subject) {
-    const parsed = await fetchAndParse(`https://plato.pusan.ac.kr/mod/quiz/index.php?id=${subject.id}`);
-    if (!parsed) return;
-    const hwLinks = Array
-                    .from(parsed.querySelectorAll("table a"))
-                    .map((e)=> "https://plato.pusan.ac.kr/mod/quiz/" + e.getAttribute("href"));
-
-    const result : Schedule[] = [];
-    for (const hwLink of hwLinks) {
-        if (!hwLink) continue;
-        const parsed = await fetchAndParse(hwLink);
-        if (!parsed) continue;
-
-        const sch = new Object() as Schedule;
-        sch.course = subject;
-        sch.type = ScheduleType.QUIZ;
-        sch.name = parsed.querySelector(".page-content-container h2")?.textContent ?? "";
-        sch.completed = (
-            parsed.querySelector("table.quizattemptsummary > tbody > tr > td:last-child") !== null && 
-            parsed.querySelector("table.quizattemptsummary > tbody > tr > td:last-child")?.textContent != ""
-        );
-        sch.id = new URL(hwLink).searchParams.get("id") ?? "";
-        sch.url = hwLink;
-        sch.orphaned = false;
-        sch.due = new Date(
-            parsed.querySelector(".quizinfo p:nth-child(2)")
-                ?.textContent
-                .replace(lang_strings.DUE_DATE_QUIZ[getLang(parsed)], "")
-                .replace(".", "")
-                .trim() ?? 0
-            );     
-        result.push(sch);
+function parseCompletionReport(page: HTMLElement, pageUrl: string) {
+    const table = page.querySelector('#region-main .table-learning-student-activity');
+    if (!table) throw new Error('활동 완료 보고서 구조를 확인할 수 없습니다.');
+    const result = new Map<string, { completed: boolean | null; learningTimeRequired: boolean }>();
+    for (const row of table.querySelectorAll('tr')) {
+        const id = videoId(row, pageUrl);
+        if (id) result.set(id, { completed: completionState(row.querySelector('.td-status')?.textContent ?? ''), learningTimeRequired: requiresLearningTime(row) });
     }
     return result;
 }
 
-async function getVids(subject : Subject) {
-    const parsed = await fetchAndParse(`https://plato.pusan.ac.kr/mod/vod/index.php?id=${subject.id}`);
-    if (!parsed) return;
-    const hwLinks = Array
-                    .from(parsed.querySelectorAll("table a"))
-                    .map((e)=> "https://plato.pusan.ac.kr/mod/vod/" + e.getAttribute("href"));
-
-    const result : Schedule[] = [];
-    for (const hwLink of hwLinks) {
-        if (!hwLink) continue;
-        const parsed = await fetchAndParse(hwLink);
-        if (!parsed) continue;
-        
-        const sch = new Object() as Schedule;
-        sch.course = subject;
-        sch.type = ScheduleType.VID;
-        sch.name = Array.from(
-            parsed.querySelectorAll(".page-content-navigation a")
-        )?.at(-1)?.textContent ?? "";
-        sch.id = new URL(hwLink).searchParams.get("id") ?? "";
-        sch.url = hwLink;
-        sch.orphaned = false;
-
-        const dateString = Array.from(parsed.querySelectorAll(".vod_info_value"))
-                ?.at(1)
-                ?.textContent
-                ?.replace(lang_strings.ATTENDANCE_PERIOD[getLang(parsed)], "")
-                .trim() ?? 0
-        // console.log(getLang(parsed), dateString);
-        sch.due = getLang(parsed) == 'en' ? 
-            usDateStringToDate(dateString) : 
-            new Date(dateString);     
-        // console.log(sch.due);
-        result.push(sch);
+export function parseSchedule(page: HTMLElement, activity: { id: string; url: string; type: ScheduleType }, course: Subject, attendance = new Map<string, Attendance>(), completion = new Map<string, { completed: boolean | null; learningTimeRequired: boolean }>()) {
+    const name = clean(page.querySelector('#page-mod-header .mod-info-title')?.textContent ?? '');
+    if (!name || !page.querySelector('#region-main')) throw new Error('활동 상세 화면을 확인할 수 없습니다.');
+    const schedule: CollectedSchedule = { ...activity, name, course, completed: null, orphaned: false, due: null };
+    const warnings: string[] = [];
+    const fields = getFields(page);
+    const dueText = page.querySelector('#page-mod-header .timeclose')?.textContent.trim()
+        ?? getField(fields, ['예정 종료 시각', '예정 종료 일시', '종료 일시', '종료일시', '마감일', '시험 기간', '출석 인정 기간', 'Due date', 'End time']);
+    const endText = dueText?.split('~').pop()?.trim();
+    if (endText && !/^(없음|미설정|제한 없음|No due date|Not set|-)$/i.test(endText)) {
+        const due = getLaterDate(findDates(endText));
+        if (due) schedule.due = due.toISOString();
+        else { delete schedule.due; warnings.push(`${name}: 마감일을 해석할 수 없어 기존 값을 유지합니다.`); }
     }
-
-    if (result.length === 0) return result;
-
-    const vidParsed = await fetchAndParse(`https://plato.pusan.ac.kr/report/ubcompletion/user_progress_a.php?id=${subject.id}`);
-    if (!vidParsed) return [];
-
-    const vidAttendanceData : Map<string, boolean> = new Map();
-    Array
-        .from(vidParsed.querySelectorAll(".user_progress_table tbody tr"))
-        .filter(e => e.children[1] && e.children[1].textContent.trim() !== "") // 2번째 <td> 요소가 비어있지 않은 행만 필터링
-        .map(e=> Array.from(e.querySelectorAll("td:not(td[rowspan])"))
-        .map(e=>e.textContent.trim()))
-        .forEach((e)=>{
-            vidAttendanceData.set(e[0], e[3] !== undefined && e[3] === "O")
-        })
-
-    const attendanceVids = result.filter((e)=>e.due.toString() !== "Invalid Date");
-    for (const vid of attendanceVids) {
-        const query = vidAttendanceData.get(vid.name);
-        if (query) vid.completed = true;
+    if (activity.type === ScheduleType.HW) {
+        const status = getField(fields, ['제출 상태', 'Submission status']);
+        if (/^(제출 완료|Submitted for grading|Submitted)$/i.test(status ?? '')) schedule.completed = true;
+        else if (/^(미제출|제출 전|초안.*|No submission|Draft.*)$/i.test(status ?? '')) schedule.completed = false;
     }
+    if (activity.type === ScheduleType.QUIZ) {
+        const states = page.querySelectorAll('.list-of-attempts .user-info-item-state .user-info-value').map(node => clean(node.textContent));
+        if (states.some(state => /^(종료|종료됨|Finished|Completed)$/i.test(state))) schedule.completed = true;
+        else if (states.length && states.every(state => /^(진행 중|진행중|미완료|기한 초과|포기|In progress|Overdue|Abandoned)$/i.test(state))) schedule.completed = false;
+        else if (page.querySelector('#region-main form[action*="/mod/quiz/startattempt.php"]')) schedule.completed = false;
+    }
+    if (activity.type === ScheduleType.VID) {
+        if (attendance.has(activity.id)) {
+            schedule.attendance = attendance.get(activity.id)!;
+            schedule.completed = schedule.attendance !== 'absent';
+        } else {
+            const reported = completion.get(activity.id);
+            if (requiresLearningTime(page)) {
+                schedule.completed = completionState(page.querySelector('#csms-mod-completion')?.textContent ?? '');
+                if (schedule.completed === null) schedule.completed = reported?.completed ?? null;
+            } else if (reported?.learningTimeRequired) schedule.completed = reported.completed;
+        }
+        if (schedule.completed === null) {
+            const text = clean(page.querySelector('#page-mod-header #csms-mod-progress')?.textContent ?? '');
+            const match = text.match(/^(\d+(?:\.\d+)?)\s*%$/);
+            const progress = match ? Number(match[1]) : NaN;
+            if (progress >= 0 && progress <= 100) {
+                schedule.completed = progress === 100;
+                schedule.completionBasis = 'progress';
+                warnings.push(`${name}: 출석 판정 없음: 시청 기준 100% 사용 (기존 확정 출석이 있으면 우선).`);
+            }
+        }
+    }
+    if (activity.type === ScheduleType.ZOOM) {
+        const status = getField(fields, ['이수 결과', '참여 결과', '이수 상태', '참여 상태', 'Participation status']);
+        schedule.completed = completionState(status ?? '');
+    }
+    if (schedule.completed === null) warnings.push(`${name}: 완료 여부 확인 불가 (기존 확정값이 있으면 유지).`);
+    return { schedule, warnings };
+}
 
+export async function collectCourse(course: Subject): Promise<CourseCollection> {
+    const result: CourseCollection = { schedules: [], discoveredIds: [], listingComplete: false, errors: [], warnings: [] };
+    const listUrl = `${ORIGIN}/local/ubion/course/activities.php?id=${course.id}`;
+    try {
+        const listPage = await fetchAndParse(listUrl);
+        const activities = getActivityLinks(listPage, listUrl);
+        result.discoveredIds = activities.map(activity => activity.id);
+        result.listingComplete = true;
+        if (listPage.querySelector('a[href*="/mod/vpl/view.php"]')) result.warnings.push(`${course.name}: VPL 자동 수집은 보류하며 기존 데이터를 보존합니다.`);
+        let attendance = new Map<string, Attendance>();
+        let completion = new Map<string, { completed: boolean | null; learningTimeRequired: boolean }>();
+        if (activities.some(activity => activity.type === ScheduleType.VID)) {
+            const reports = new Map<string, string>();
+            for (const link of listPage.querySelectorAll('a[href]')) {
+                const url = new URL(link.getAttribute('href')!, listUrl);
+                if (url.origin !== ORIGIN || url.searchParams.get('id') !== course.id) continue;
+                if (/^\/local\/ubsmartbook\/(index|my)\.php$/.test(url.pathname)) reports.set('attendance', url.href);
+                if (/^\/report\/ublogs\/(completion|student\/activity)\.php$/.test(url.pathname)) reports.set('completion', url.href);
+            }
+            for (const [kind, url] of reports) {
+                try {
+                    const page = await fetchAndParse(url);
+                    if (kind === 'attendance') attendance = parseAttendanceReport(page, url);
+                    else completion = parseCompletionReport(page, url);
+                } catch (error) {
+                    result.errors.push(`${course.name} / ${kind === 'attendance' ? '출석' : '활동 완료'} 보고서: ${errorMessage(error)}`);
+                }
+            }
+        }
+        for (const activity of activities) {
+            try {
+                const parsed = parseSchedule(await fetchAndParse(activity.url), activity, course, attendance, completion);
+                result.schedules.push(parsed.schedule);
+                result.warnings.push(...parsed.warnings);
+            } catch (error) {
+                result.errors.push(`${course.name} / 활동 ${activity.id}: ${errorMessage(error)}`);
+            }
+        }
+    } catch (error) {
+        result.errors.push(`${course.name}: ${errorMessage(error)}`);
+    }
     return result;
 }
 
-async function getZooms(subject : Subject) {
-    const parsed = await fetchAndParse(`https://plato.pusan.ac.kr/mod/zoom/index.php?id=${subject.id}`);
-    if (!parsed) return;
-    const hwLinks = Array
-                    .from(parsed.querySelectorAll("table a"))
-                    .map((e)=> "https://plato.pusan.ac.kr/mod/zoom/" + e.getAttribute("href"));
-
-    const result : Schedule[] = [];
-    for (const hwLink of hwLinks) {
-        if (!hwLink) continue;
-        const parsed = await fetchAndParse(hwLink);
-        if (!parsed) continue;
-
-
-        const sch = new Object() as Schedule;
-        sch.course = subject;
-        sch.type = ScheduleType.ZOOM;
-        sch.name = parsed.querySelector(".page-content-container h2")?.textContent ?? "";
-        sch.completed = parsed.querySelectorAll(".ubzoom_list table tr").length > 1;
-        sch.id = new URL(hwLink).searchParams.get("id") ?? "";
-        sch.url = hwLink;
-        sch.orphaned = false;
-        sch.due = new Date(
-            parsed
-                .querySelector("#show_schedule tr:nth-child(1) td:nth-child(2)")
-                ?.textContent ?? 0
-            );     
-        result.push(sch);
-    }
-
-    return result;
+let pendingUpdate: Promise<UpdateResult> | undefined;
+export function updateData(): Promise<UpdateResult> {
+    return pendingUpdate ??= performUpdate().finally(() => { pendingUpdate = undefined; });
 }
 
-async function getPAs(subject : Subject) {
-    const parsed = await fetchAndParse(`https://plato.pusan.ac.kr/mod/vpl/index.php?id=${subject.id}`);
-    if (!parsed) return;
-   
-    const assignmentRows = Array.from(parsed.querySelectorAll("table tbody tr"));
-    const result : Schedule[] = [];
-    for (const row of assignmentRows) {
-        const sch = new Object() as Schedule;
-        if (row.childElementCount <= 1) continue;
-        sch.course = subject;
-        sch.type = ScheduleType.PA;
-        sch.name = row.children[1].querySelector("a")?.textContent ?? "";
-        sch.completed = row.children[4]?.textContent != lang_strings.NO_SUBMISSIONS[getLang(parsed)];
-        sch.url = "https://plato.pusan.ac.kr/mod/vpl/" 
-            + (row.children[1].querySelector("a")?.getAttribute("href") ?? "");
-        sch.id = new URL(sch.url).searchParams?.get("id") ?? "";
-        sch.orphaned = false;
-        sch.due = new Date(
-            row.children[3]?.textContent ?? 0
-        )
-        result.push(sch);
+async function performUpdate(): Promise<UpdateResult> {
+    const result: UpdateResult = { result: false, errors: [], warnings: [] };
+    try {
+        const courses = await getCoursesList();
+        const oldSchedules = await ScheduleStorageManager.getInstance().loadAllSchedules();
+        if (Object.values(oldSchedules).some(items => Object.values(items).some(item => item.type === ScheduleType.PA))) {
+            result.warnings.push('VPL 자동 수집은 보류하며 기존 데이터를 보존합니다.');
+        }
+        for (const course of courses) {
+            const collection = await collectCourse(course);
+            result.errors.push(...collection.errors);
+            result.warnings.push(...collection.warnings);
+            if (collection.listingComplete) {
+                try {
+                    await ScheduleStorageManager.getInstance().updateSchedulesForCourse(course.id, collection.schedules, collection);
+                } catch (error) { result.errors.push(`${course.name} / 저장 실패: ${errorMessage(error)}`); }
+            }
+        }
+        result.result = result.errors.length === 0;
+    } catch (error) {
+        result.errors.push(errorMessage(error));
     }
     return result;
-
 }
-
-export async function updateData() {
-    // const courses = await getCoursesListTest("2025", "10");
-    const courses = await getCoursesList();
-
-    for (const course of courses) {
-        const result = (await Promise.all([
-            getHomeworks(course),
-            getQuizes(course),
-            getVids(course),
-            getZooms(course),
-            getPAs(course)
-        ]))
-        .flat()
-        .filter((e)=>e!==undefined);
-
-        await ScheduleStorageManager
-            .getInstance()
-            .updateSchedulesForCourse(course.id, result);
-        console.log(course.name, result);
-    }
-    return true;
-} 

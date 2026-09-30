@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "build": "node build.js"
   },
   "keywords": [],
@@ -12,7 +13,11 @@
   "description": "",
   "devDependencies": {
     "@types/chrome": "^0.0.328",
-    "esbuild": "^0.25.5"
+    "esbuild": "^0.25.5",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.2"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1"
